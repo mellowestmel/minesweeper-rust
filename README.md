@@ -1,2 +1,2 @@
 # minesweeper-rust
-minesweeper but rust :3
+baby's first rust :3
