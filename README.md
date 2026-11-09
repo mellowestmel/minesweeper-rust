@@ -1,2 +1,2 @@
-# minesweeper-go
-attempt at learning go :3
+# minesweeper-rust
+minesweeper but rust :3
