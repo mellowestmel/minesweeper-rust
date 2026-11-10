@@ -3,17 +3,11 @@ use rand::seq::SliceRandom;
 
 use crate::constants::GRID;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum CellState {
-    Hidden,
-    Revealed,
-    Flagged
-}
-
 #[derive(Clone, Copy)]
 pub struct Cell {
+    pub is_flagged: bool,
+    pub is_hidden: bool,
     pub is_mine: bool,
-    pub state: CellState,
 }
 
 pub struct Grid {
@@ -22,8 +16,6 @@ pub struct Grid {
     pub size_x: usize,
     pub size_y: usize,
     
-    pub mine_count: usize,
-
     pub cells: Vec<Cell>,
 }
 
@@ -32,12 +24,14 @@ impl Grid {
     pub fn create(size_x: usize, size_y: usize, mine_count: usize) -> Self {
         let area = size_x * size_y;
 
+        assert!(area > 0);
         assert!(mine_count <= area);
 
         let mut cells = vec![
             Cell {
+                is_flagged: false,
+                is_hidden: true,
                 is_mine: false,
-                state: CellState::Hidden,
             };
             area
         ];
@@ -49,16 +43,24 @@ impl Grid {
             cells[*position].is_mine = true;
         }
 
-        Self {
+        let mut grid = Self {
             lost: false,
 
             size_x,
             size_y,
 
-            mine_count,
-
             cells,
+        };
+
+        // Find a safe starting cell.
+        if let Some(index) = (0..area).find(|&i| {
+            !grid.cells[i].is_mine
+                && grid.get_neighbor_mine_count(i) == 0
+        }) {
+            grid.reveal_cell(index);
         }
+
+        grid
     }
 
     pub fn step(&mut self, raylib_handle: &RaylibHandle) {
@@ -94,15 +96,17 @@ impl Grid {
 
     pub fn reveal_mines(&mut self) {
         for index in 0..self.cells.len() {
-            if self.cells[index].is_mine {
-                self.cells[index].state = CellState::Revealed;
+            if self.cells[index].is_mine && self.cells[index].is_hidden {
+                self.cells[index].is_hidden = false;
             }
         }
     }
 
     pub fn reveal_neighbors(&mut self, index: usize) {
         for neighbor_index in self.get_neighbors(index) {
-            if self.cells[neighbor_index].state == CellState::Hidden {
+            if self.cells[neighbor_index].is_hidden
+                && !self.cells[neighbor_index].is_flagged
+            {
                 self.reveal_cell(neighbor_index);
             }
         }
@@ -113,35 +117,35 @@ impl Grid {
             return;
         }
 
-        let state = self.cells[index].state;
+        let cell = self.cells[index];
 
         // Revealing a hidden cell
-        if state == CellState::Hidden {
-            self.cells[index].state = CellState::Revealed;
+        if cell.is_hidden && !cell.is_flagged {
+            self.cells[index].is_hidden = false;
 
-            if self.cells[index].is_mine {
+            if cell.is_mine {
                 self.lost = true;
                 self.reveal_mines();
                 return;
             }
 
             if self.get_neighbor_mine_count(index) == 0 {
-                self.reveal_neighbors(index)
+                self.reveal_neighbors(index);
             }
         }
 
         // Chording
-        else if state == CellState::Revealed {
+        else {
             let neighbors = self.get_neighbors(index);
             let mine_count = self.get_neighbor_mine_count(index);
 
             let flagged_count = neighbors
                 .iter()
-                .filter(|&&i| self.cells[i].state == CellState::Flagged)
+                .filter(|&&i| self.cells[i].is_flagged)
                 .count();
 
             if mine_count > 0 && flagged_count == mine_count {
-                self.reveal_neighbors(index)
+                self.reveal_neighbors(index);
             }
         }
     }
@@ -149,10 +153,8 @@ impl Grid {
     pub fn flag_cell(&mut self, index: usize) {
         let cell = &mut self.cells[index];
 
-        if cell.state == CellState::Hidden {
-            cell.state = CellState::Flagged;
-        } else if cell.state == CellState::Flagged {
-            cell.state = CellState::Hidden;
+        if cell.is_hidden {
+            cell.is_flagged = !cell.is_flagged;
         }
     }
 

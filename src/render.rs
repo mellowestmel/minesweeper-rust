@@ -1,26 +1,27 @@
 use raylib::prelude::*;
 
-use crate::game::grid::{Grid, Cell, CellState};
+use crate::game::grid::{Grid, Cell};
 use crate::constants::*;
 
 pub fn init() -> (RaylibHandle, RaylibThread) {
     raylib::init()
         .size(WINDOW::WIDTH, WINDOW::HEIGHT)
         .title(WINDOW::TITLE)
+        .resizable()
         .build()
 }
 
-pub fn draw_cell(drawing: &mut RaylibDrawHandle<'_>, x: i32, y: i32, cell: Cell, neighbor_mine_count: usize) {
-    let color = 
-        if cell.state == CellState::Revealed {
-            if cell.is_mine {
-                GRID::CELL_REVEALED_MINE_COLOR
-            } else {
-                GRID::CELL_REVEALED_COLOR
-            }
-        } else {
+pub fn draw_cell(drawing: &mut RaylibDrawHandle<'_>, x: i32, y: i32, grid: &Grid, cell: Cell, neighbor_mine_count: usize) {
+    let mut color = 
+        if cell.is_hidden {
             GRID::CELL_HIDDEN_COLOR
+        } else {
+            GRID::CELL_REVEALED_COLOR
         };
+
+    if grid.lost && !cell.is_hidden && cell.is_mine {
+        color = GRID::CELL_REVEALED_MINE_COLOR
+    }
 
     drawing.draw_rectangle(
         x,
@@ -42,26 +43,23 @@ pub fn draw_cell(drawing: &mut RaylibDrawHandle<'_>, x: i32, y: i32, cell: Cell,
         GRID::CELL_OUTLINE_COLOR,
     );
 
-    if cell.state != CellState::Hidden {
-        let text = match cell.state {
-            CellState::Revealed => {
-                if cell.is_mine {
-                    String::new()
+    if !cell.is_hidden || cell.is_flagged {
+        let text =
+            if cell.is_flagged {
+                "F".to_string()
+            } else if !cell.is_hidden && !cell.is_mine {
+                if neighbor_mine_count > 0 {
+                    neighbor_mine_count.to_string()
                 } else {
-                    if neighbor_mine_count > 0 {
-                        neighbor_mine_count.to_string()
-                    } else {
-                        String::new()
-                    }
+                    String::new()
                 }
-            }
-            CellState::Flagged => "F".to_string(),
-            CellState::Hidden => String::new(),
-        };
+            } else {
+                String::new()
+            };
 
         drawing.draw_text(
             &text,
-            
+
             x,
             y,
 
@@ -83,7 +81,7 @@ pub fn draw_grid(drawing: &mut RaylibDrawHandle<'_>, grid: &Grid) {
 
             let neighbor_mine_count = grid.get_neighbor_mine_count(index);
 
-            draw_cell(drawing, grid_x, grid_y, cell, neighbor_mine_count);
+            draw_cell(drawing, grid_x, grid_y, grid, cell, neighbor_mine_count);
         }
     }
 }
